@@ -1,0 +1,27 @@
+connector_image: airbyte/source-maestro-qa:dev
+acceptance_tests:
+  spec:
+    tests:
+      - spec_path: "source_maestro_qa/spec.yaml"
+  connection:
+    tests:
+      - config_path: "secrets/config.json"
+        status: "succeed"
+      - config_path: "integration_tests/invalid_config.json"
+        status: "failed"
+  discovery:
+    bypass_reason: "Incremental syncs use cursor that's not part of the schema."
+  basic_read:
+    tests:
+      - config_path: "secrets/config.json"
+        configured_catalog_path: "integration_tests/configured_catalog.json"
+        ignored_fields:
+          total_scores:
+            - name: "last_synced_at"
+              bypass_reason: "Cursor field is not part of the schema."
+  incremental:
+    bypass_reason: "Incremental syncs use cursor that's not part of the schema."
+  full_refresh:
+    tests:
+      - config_path: "secrets/config.json"
+        configured_catalog_path: "integration_tests/configured_catalog.json"
