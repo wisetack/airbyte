@@ -2,52 +2,59 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
-    "date": {
+    "observation_time": {
       "type": "string"
     },
-    "date_epoch": {
+    "temperature": {
       "type": "integer"
     },
-    "astro": {
-      "type": "object",
-      "properties": {
-        "sunrise": {
-          "type": "string"
-        },
-        "sunset": {
-          "type": "string"
-        },
-        "moonrise": {
-          "type": "string"
-        },
-        "moonset": {
-          "type": "string"
-        },
-        "moon_phase": {
-          "type": "string"
-        },
-        "moon_illumination": {
-          "type": "integer"
-        }
+    "weather_code": {
+      "type": "integer"
+    },
+    "weather_icons": {
+      "type": "array",
+      "items": {
+        "type": "string"
       }
     },
-    "mintemp": {
-      "type": "integer"
+    "weather_descriptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
-    "maxtemp": {
-      "type": "integer"
+    "wind_speed": {
+      "type": "number"
     },
-    "avgtemp": {
-      "type": "integer"
+    "wind_degree": {
+      "type": "number"
     },
-    "totalsnow": {
-      "type": "integer"
+    "wind_dir": {
+      "type": "string"
     },
-    "sunhour": {
+    "pressure": {
+      "type": "number"
+    },
+    "precip": {
+      "type": "number"
+    },
+    "humidity": {
+      "type": "number"
+    },
+    "cloudcover": {
+      "type": "number"
+    },
+    "feelslike": {
       "type": "number"
     },
     "uv_index": {
-      "type": "integer"
+      "type": "number"
+    },
+    "visibility": {
+      "type": "number"
+    },
+    "is_day": {
+      "type": "string"
     },
     "location": {
       "type": "object",
@@ -62,10 +69,10 @@
           "type": "string"
         },
         "lat": {
-          "type": "string"
+          "type": "number"
         },
         "lon": {
-          "type": "string"
+          "type": "number"
         },
         "timezone_id": {
           "type": "string"
