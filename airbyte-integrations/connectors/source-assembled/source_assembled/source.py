@@ -203,7 +203,7 @@ class IncrementalAssembledStream(AssembledStream, ABC):
         if state_ts and sync_mode == SyncMode.incremental:
             days_diff = current_date.diff(state_ts).in_days()
             days = self._history_days if days_diff >= 1 else 1
-            logger.info(f"Syncing {days} for stream {self.name}")
+            logger.info(f"Syncing {days} days of data for stream {self.name}")
             start_ts = current_date - pendulum.duration(days=days)
 
         for period in chunk_date_range(start_date=start_ts, end_date=end_ts):
@@ -312,7 +312,7 @@ class ReportStream(HttpSubStream, AssembledStream):
         self._cursor_value = value[self.cursor_field]
 
     def should_retry(self, response: requests.Response) -> bool:
-        result = response.json()
+        result = response.json() if response.status_code >= 200 and response.status_code < 204 else {}
         return super().should_retry(response) or result.get("status", "failed") != "complete"
 
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
