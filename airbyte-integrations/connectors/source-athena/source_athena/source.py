@@ -122,8 +122,8 @@ class IncrementalAthenaStream(AthenaStream, IncrementalMixin):
         stream_slice: Optional[Mapping[str, Any]] = None,
         stream_state: Optional[Mapping[str, Any]] = None,
     ) -> Iterable[Union[Mapping[str, Any], AirbyteMessage]]:
-        is_incremental = self._cursor_value \
-            and sync_mode == SyncMode.incremental
+        is_incremental = sync_mode == SyncMode.incremental \
+            and self._initial_cursor_value
 
         for record in self._handler.fetch_query_executions(stream_slice):
             record = self._process_record(record)
