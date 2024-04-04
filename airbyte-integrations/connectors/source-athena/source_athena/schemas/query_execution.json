@@ -1,0 +1,129 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "QueryExecutionId": {
+      "type": ["string", "null"]
+    },
+    "Query": {
+      "type": ["string", "null"]
+    },
+    "StatementType": {
+      "type": ["string", "null"]
+    },
+    "ResultConfiguration": {
+      "type": "object",
+      "properties": {
+        "OutputLocation": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "ResultReuseConfiguration": {
+      "type": "object",
+      "properties": {
+        "ResultReuseByAgeConfiguration": {
+          "type": "object",
+          "properties": {
+            "Enabled": {
+              "type": ["boolean", "null"]
+            }
+          }
+        }
+      }
+    },
+    "QueryExecutionContext": {
+      "type": "object",
+      "properties": {
+        "Database": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "Status": {
+      "type": "object",
+      "properties": {
+        "State": {
+          "type": ["string", "null"]
+        },
+        "SubmissionDateTime": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "CompletionDateTime": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    },
+    "Statistics": {
+      "type": "object",
+      "properties": {
+        "EngineExecutionTimeInMillis": {
+          "type": ["integer", "null"]
+        },
+        "DataScannedInBytes": {
+          "type": ["integer", "null"]
+        },
+        "TotalExecutionTimeInMillis": {
+          "type": ["integer", "null"]
+        },
+        "QueryQueueTimeInMillis": {
+          "type": ["integer", "null"]
+        },
+        "ServicePreProcessingTimeInMillis": {
+          "type": ["integer", "null"]
+        },
+        "QueryPlanningTimeInMillis": {
+          "type": ["integer", "null"]
+        },
+        "ServiceProcessingTimeInMillis": {
+          "type": ["integer", "null"]
+        },
+        "ResultReuseInformation": {
+          "type": "object",
+          "properties": {
+            "ReusedPreviousResult": {
+              "type": ["boolean", "null"]
+            }
+          }
+        }
+      }
+    },
+    "WorkGroup": {
+      "type": ["string", "null"]
+    },
+    "EngineVersion": {
+      "type": "object",
+      "properties": {
+        "SelectedEngineVersion": {
+          "type": ["string", "null"]
+        },
+        "EffectiveEngineVersion": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "SubstatementType": {
+      "type": ["string", "null"]
+    },
+    "TableInformation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "TableName": {
+            "type": ["string", "null"]
+          },
+          "DatabaseName": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    },
+    "QueryDateTime": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    }
+  }
+}
