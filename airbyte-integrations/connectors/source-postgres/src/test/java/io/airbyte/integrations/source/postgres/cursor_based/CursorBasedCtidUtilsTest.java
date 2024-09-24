@@ -14,13 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Lists;
+import io.airbyte.cdk.integrations.source.relationaldb.state.StreamStateManager;
 import io.airbyte.commons.json.Jsons;
 import io.airbyte.integrations.source.postgres.ctid.CtidUtils.StreamsCategorised;
 import io.airbyte.integrations.source.postgres.cursor_based.CursorBasedCtidUtils.CursorBasedStreams;
 import io.airbyte.integrations.source.postgres.internal.models.CtidStatus;
 import io.airbyte.integrations.source.postgres.internal.models.CursorBasedStatus;
 import io.airbyte.integrations.source.postgres.internal.models.InternalModels.StateType;
-import io.airbyte.integrations.source.relationaldb.state.StreamStateManager;
 import io.airbyte.protocol.models.Field;
 import io.airbyte.protocol.models.JsonSchemaType;
 import io.airbyte.protocol.models.v0.AirbyteStateMessage;
@@ -152,9 +152,8 @@ public class CursorBasedCtidUtilsTest {
     final StreamStateManager streamStateManager = new StreamStateManager(List.of(stream1CtidState, stream2StandardState), configuredCatalog);
     final StreamsCategorised<CursorBasedStreams> streamsCategorised = categoriseStreams(streamStateManager, configuredCatalog);
 
-    assertEquals(streamsCategorised.ctidStreams().streamsForCtidSync().size(), 1);
+    assertEquals(streamsCategorised.ctidStreams().streamsForCtidSync().size(), 2);
     assertEquals(streamsCategorised.remainingStreams().streamsForCursorBasedSync().size(), 1);
-    assertEquals(streamsCategorised.ctidStreams().streamsForCtidSync().stream().findFirst().get(), STREAM_1);
     assertTrue(streamsCategorised.remainingStreams().streamsForCursorBasedSync().contains(STREAM_2));
     assertFalse(streamsCategorised.remainingStreams().streamsForCursorBasedSync().contains(STREAM_3_FULL_REFRESH));
   }

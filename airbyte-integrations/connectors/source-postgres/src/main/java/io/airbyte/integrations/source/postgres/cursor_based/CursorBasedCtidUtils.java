@@ -9,10 +9,11 @@ import static io.airbyte.integrations.source.postgres.ctid.CtidUtils.getStreamsF
 import static io.airbyte.integrations.source.postgres.ctid.CtidUtils.identifyNewlyAddedStreams;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.airbyte.cdk.integrations.source.relationaldb.state.StateManager;
+import io.airbyte.commons.exceptions.ConfigErrorException;
 import io.airbyte.integrations.source.postgres.ctid.CtidUtils.CtidStreams;
 import io.airbyte.integrations.source.postgres.ctid.CtidUtils.StreamsCategorised;
 import io.airbyte.integrations.source.postgres.internal.models.InternalModels.StateType;
-import io.airbyte.integrations.source.relationaldb.state.StateManager;
 import io.airbyte.protocol.models.v0.AirbyteStateMessage;
 import io.airbyte.protocol.models.v0.AirbyteStreamNameNamespacePair;
 import io.airbyte.protocol.models.v0.ConfiguredAirbyteCatalog;
@@ -67,7 +68,7 @@ public class CursorBasedCtidUtils {
             cursorBasedSyncStreamPairs.add(pair);
             statesFromCursorBasedSync.add(stateMessage);
           } else {
-            throw new RuntimeException("Unknown state type: " + streamState.get(STATE_TYPE_KEY).asText());
+            throw new ConfigErrorException("You've changed replication modes - please reset the streams in this connector");
           }
         } else {
           LOGGER.info("State type not present, syncing stream {} via cursor", streamDescriptor.getName());
@@ -79,10 +80,14 @@ public class CursorBasedCtidUtils {
     }
 
     final List<ConfiguredAirbyteStream> newlyAddedIncrementalStreams =
-        identifyNewlyAddedStreams(fullCatalog, alreadySeenStreamPairs, SyncMode.INCREMENTAL);
+        identifyNewlyAddedStreams(fullCatalog, alreadySeenStreamPairs);
     final List<ConfiguredAirbyteStream> streamsForCtidSync = getStreamsFromStreamPairs(fullCatalog, stillInCtidStreamPairs, SyncMode.INCREMENTAL);
+    final List<ConfiguredAirbyteStream> fullRefreshStreamsForCtidSync =
+        getStreamsFromStreamPairs(fullCatalog, stillInCtidStreamPairs, SyncMode.FULL_REFRESH);
+
     final List<ConfiguredAirbyteStream> streamsForCursorBasedSync =
         getStreamsFromStreamPairs(fullCatalog, cursorBasedSyncStreamPairs, SyncMode.INCREMENTAL);
+    streamsForCtidSync.addAll(fullRefreshStreamsForCtidSync);
     streamsForCtidSync.addAll(newlyAddedIncrementalStreams);
 
     return new StreamsCategorised<>(new CtidStreams(streamsForCtidSync, statesFromCtidSync),

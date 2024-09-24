@@ -5,13 +5,18 @@
 import time
 from abc import ABC
 from datetime import timedelta
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional
+from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
 
 import pendulum
 import requests
+from airbyte_cdk import BackoffStrategy
 from airbyte_cdk.sources.streams.http import HttpStream
-from airbyte_cdk.sources.streams.http.auth import HttpAuthenticator
+from airbyte_cdk.sources.streams.http.error_handlers import ErrorHandler
 from pendulum import Date
+from requests.auth import AuthBase
+from source_mixpanel.backoff_strategy import MixpanelStreamBackoffStrategy
+from source_mixpanel.errors_handlers import MixpanelStreamErrorHandler
+from source_mixpanel.utils import fix_date_time
 
 
 class MixpanelStream(HttpStream, ABC):
@@ -22,6 +27,13 @@ class MixpanelStream(HttpStream, ABC):
     """
 
     DEFAULT_REQS_PER_HOUR_LIMIT = 60
+
+    @property
+    def state_checkpoint_interval(self) -> int:
+        # to meet the requirement of emitting state at least once per 15 minutes,
+        # we assume there's at least 1 record per request returned. Given that each request is followed by a 60 seconds sleep
+        # we'll have to emit state every 15 records
+        return 15
 
     @property
     def url_base(self):
@@ -39,11 +51,11 @@ class MixpanelStream(HttpStream, ABC):
 
     def __init__(
         self,
-        authenticator: HttpAuthenticator,
+        authenticator: AuthBase,
         region: str,
-        project_timezone: str,
-        start_date: Date = None,
-        end_date: Date = None,
+        project_timezone: Optional[str] = "US/Pacific",
+        start_date: Optional[Date] = None,
+        end_date: Optional[Date] = None,
         date_window_size: int = 30,  # in days
         attribution_window: int = 0,  # in days
         select_properties_by_default: bool = True,
@@ -59,9 +71,7 @@ class MixpanelStream(HttpStream, ABC):
         self.region = region
         self.project_timezone = project_timezone
         self.project_id = project_id
-        self.retries = 0
         self._reqs_per_hour_limit = reqs_per_hour_limit
-
         super().__init__(authenticator=authenticator)
 
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
@@ -83,6 +93,7 @@ class MixpanelStream(HttpStream, ABC):
             data = [json_response]
 
         for record in data:
+            fix_date_time(record)
             yield record
 
     def parse_response(
@@ -91,7 +102,6 @@ class MixpanelStream(HttpStream, ABC):
         stream_state: Mapping[str, Any],
         **kwargs,
     ) -> Iterable[Mapping]:
-
         # parse the whole response
         yield from self.process_response(response, stream_state=stream_state, **kwargs)
 
@@ -101,32 +111,18 @@ class MixpanelStream(HttpStream, ABC):
             self.logger.info(f"Sleep for {3600 / self.reqs_per_hour_limit} seconds to match API limitations after reading from {self.name}")
             time.sleep(3600 / self.reqs_per_hour_limit)
 
-    def backoff_time(self, response: requests.Response) -> float:
-        """
-        Some API endpoints do not return "Retry-After" header.
-        https://developer.mixpanel.com/reference/import-events#rate-limits (exponential backoff)
-        """
+    def get_backoff_strategy(self) -> Optional[Union[BackoffStrategy, List[BackoffStrategy]]]:
+        return MixpanelStreamBackoffStrategy(stream=self)
 
-        retry_after = response.headers.get("Retry-After")
-        if retry_after:
-            self.logger.debug(f"API responded with `Retry-After` header: {retry_after}")
-            return float(retry_after)
-
-        self.retries += 1
-        return 2**self.retries * 60
-
-    def should_retry(self, response: requests.Response) -> bool:
-        if response.status_code == 402:
-            self.logger.warning(f"Unable to perform a request. Payment Required: {response.json()['error']}")
-            return False
-        return super().should_retry(response)
+    def get_error_handler(self) -> Optional[ErrorHandler]:
+        return MixpanelStreamErrorHandler(logger=self.logger)
 
     def get_stream_params(self) -> Mapping[str, Any]:
         """
         Fetch required parameters in a given stream. Used to create sub-streams
         """
         params = {
-            "authenticator": self.authenticator,
+            "authenticator": self._http_client._session.auth,
             "region": self.region,
             "project_timezone": self.project_timezone,
             "reqs_per_hour_limit": self.reqs_per_hour_limit,
@@ -148,18 +144,6 @@ class MixpanelStream(HttpStream, ABC):
 
 class DateSlicesMixin:
     raise_on_http_errors = True
-
-    def should_retry(self, response: requests.Response) -> bool:
-        if response.status_code == requests.codes.bad_request:
-            if "to_date cannot be later than today" in response.text:
-                self._timezone_mismatch = True
-                self.logger.warning(
-                    "Your project timezone must be misconfigured. Please set it to the one defined in your Mixpanel project settings. "
-                    "Stopping current stream sync."
-                )
-                setattr(self, "raise_on_http_errors", False)
-                return False
-        return super().should_retry(response)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

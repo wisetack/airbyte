@@ -8,15 +8,14 @@ import static io.airbyte.integrations.source.postgres.ctid.CtidStateManager.STAT
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Sets;
+import io.airbyte.cdk.integrations.source.relationaldb.CdcStateManager;
 import io.airbyte.commons.json.Jsons;
 import io.airbyte.integrations.source.postgres.internal.models.CtidStatus;
-import io.airbyte.integrations.source.relationaldb.CdcStateManager;
 import io.airbyte.protocol.models.v0.AirbyteStateMessage;
 import io.airbyte.protocol.models.v0.AirbyteStreamNameNamespacePair;
 import io.airbyte.protocol.models.v0.ConfiguredAirbyteCatalog;
 import io.airbyte.protocol.models.v0.ConfiguredAirbyteStream;
 import io.airbyte.protocol.models.v0.StreamDescriptor;
-import io.airbyte.protocol.models.v0.SyncMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,7 +33,6 @@ public class PostgresCdcCtidUtils {
       return new CtidStreams(
           fullCatalog.getStreams()
               .stream()
-              .filter(c -> c.getSyncMode() == SyncMode.INCREMENTAL)
               .collect(Collectors.toList()),
           new HashMap<>());
     }
@@ -78,7 +76,6 @@ public class PostgresCdcCtidUtils {
     final Set<AirbyteStreamNameNamespacePair> allStreams = AirbyteStreamNameNamespacePair.fromConfiguredCatalog(catalog);
     final Set<AirbyteStreamNameNamespacePair> newlyAddedStreams = new HashSet<>(Sets.difference(allStreams, alreadySyncedStreams));
     return catalog.getStreams().stream()
-        .filter(c -> c.getSyncMode() == SyncMode.INCREMENTAL)
         .filter(stream -> newlyAddedStreams.contains(AirbyteStreamNameNamespacePair.fromAirbyteStream(stream.getStream()))).map(Jsons::clone)
         .collect(Collectors.toList());
   }

@@ -10,13 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Lists;
+import io.airbyte.cdk.integrations.source.relationaldb.state.StreamStateManager;
 import io.airbyte.commons.json.Jsons;
 import io.airbyte.integrations.source.postgres.ctid.CtidUtils.StreamsCategorised;
 import io.airbyte.integrations.source.postgres.internal.models.CtidStatus;
 import io.airbyte.integrations.source.postgres.internal.models.InternalModels.StateType;
 import io.airbyte.integrations.source.postgres.internal.models.XminStatus;
 import io.airbyte.integrations.source.postgres.xmin.XminCtidUtils.XminStreams;
-import io.airbyte.integrations.source.relationaldb.state.StreamStateManager;
 import io.airbyte.protocol.models.Field;
 import io.airbyte.protocol.models.JsonSchemaType;
 import io.airbyte.protocol.models.v0.AirbyteStateMessage;
@@ -132,8 +132,7 @@ public class XminCtidUtilsTest {
     assertEquals(1, streamsCategorised.remainingStreams().statesFromXminSync().size());
     assertEquals(xminState, streamsCategorised.remainingStreams().statesFromXminSync().get(0));
 
-    assertEquals(1, streamsCategorised.ctidStreams().streamsForCtidSync().size());
-    assertEquals(MODELS_STREAM_2, streamsCategorised.ctidStreams().streamsForCtidSync().get(0));
+    assertEquals(2, streamsCategorised.ctidStreams().streamsForCtidSync().size());
     assertEquals(1, streamsCategorised.ctidStreams().statesFromCtidSync().size());
     assertEquals(ctidState, streamsCategorised.ctidStreams().statesFromCtidSync().get(0));
 
