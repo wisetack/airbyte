@@ -272,7 +272,7 @@ class Sites(FiservStream):
         stream_slice: Mapping[str, Any] = None,
         next_page_token: Mapping[str, Any] = None,
     ) -> Optional[Mapping[str, Any]]:
-        return json.dump(
+        return json.dumps(
             {"filters": {}},
             separators=(",", ":"),
             sort_keys=True,
