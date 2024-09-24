@@ -4,7 +4,16 @@
 
 
 from abc import ABC
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
+from typing import (
+    Any,
+    Iterable,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Union,
+)
 from airbyte_cdk.models import SyncMode
 from airbyte_cdk.sources.streams.core import StreamData
 
@@ -31,7 +40,13 @@ class FiservStream(HttpStream, ABC):
     endpoint = None
 
     def __init__(
-        self, *args, start_date: str = None, api_key: str = None, api_secret: str = None, fields: Optional[List[str]] = None, **kwargs
+        self,
+        *args,
+        start_date: str = None,
+        api_key: str = None,
+        api_secret: str = None,
+        fields: Optional[List[str]] = None,
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
 
@@ -49,17 +64,23 @@ class FiservStream(HttpStream, ABC):
     def http_method(self) -> str:
         return "POST"
 
-    def _chunk_date_range(self, start_date: str, end_date: str) -> Iterable[Mapping[str, str]]:
+    def _chunk_date_range(
+        self,
+        start_date: str,
+        end_date: str,
+    ) -> Iterable[Mapping[str, str]]:
         start_date = pendulum.parse(start_date)
         end_date = pendulum.parse(end_date)
         chunk_start_date = start_date
         while chunk_start_date < end_date:
             chunck_end_date = chunk_start_date.add(days=1)
-            yield {"fromDate": chunk_start_date.strftime("%Y%m%d"), "toDate": chunck_end_date.strftime("%Y%m%d")}
+            yield {
+                "fromDate": chunk_start_date.strftime("%Y%m%d"),
+                "toDate": chunck_end_date.strftime("%Y%m%d"),
+            }
             chunk_start_date = chunck_end_date
 
-    def _generate_hmac(self, request_id: str, ts: str, body: Mapping[str, Any]):
-        body = json.dumps(body)
+    def _generate_hmac(self, request_id: str, ts: str, body: str):
         msg = f"{self._api_key}{request_id}{ts}{body}"
         hashed = hmac.new(
             bytes(self._api_secret, "utf-8"),
@@ -68,7 +89,7 @@ class FiservStream(HttpStream, ABC):
         )
         return base64.b64encode(hashed.digest()).decode()
 
-    def request_body_json(
+    def request_body_data(
         self,
         stream_state: Mapping[str, Any] = None,
         stream_slice: Mapping[str, Any] = None,
@@ -78,14 +99,21 @@ class FiservStream(HttpStream, ABC):
         if self._fields:
             body["fields"] = self._fields
 
-        return body
+        return json.dumps(body, separators=(",", ":"), sort_keys=True)
 
     def request_headers(
-        self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
+        self,
+        stream_state: Mapping[str, Any],
+        stream_slice: Mapping[str, Any] = None,
+        next_page_token: Mapping[str, Any] = None,
     ) -> Mapping[str, Any]:
         request_id = str(uuid.uuid4())
         ts = str(int(pendulum.now(tz="UTC").timestamp() * 1000))
-        body = self.request_body_json(stream_state=stream_state, stream_slice=stream_slice, next_page_token=next_page_token)
+        body = self.request_body_data(
+            stream_state=stream_state,
+            stream_slice=stream_slice,
+            next_page_token=next_page_token,
+        )
         hmac_signature = self._generate_hmac(request_id, ts, body)
         return {
             "Content-Type": "application/json",
@@ -97,18 +125,32 @@ class FiservStream(HttpStream, ABC):
         }
 
     def path(
-        self, *, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
+        self,
+        *,
+        stream_state: Mapping[str, Any] = None,
+        stream_slice: Mapping[str, Any] = None,
+        next_page_token: Mapping[str, Any] = None,
     ) -> str:
         return f"reporting/v1/{self.endpoint}/search"
 
-    def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
+    def next_page_token(
+        self,
+        response: requests.Response,
+    ) -> Optional[Mapping[str, Any]]:
         return None
 
-    def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
+    def parse_response(
+        self,
+        response: requests.Response,
+        **kwargs,
+    ) -> Iterable[Mapping]:
         yield from response.json()
 
     def stream_slices(
-        self, sync_mode: SyncMode, cursor_field: List[str] = None, stream_state: Mapping[str, Any] = None
+        self,
+        sync_mode: SyncMode,
+        cursor_field: List[str] = None,
+        stream_state: Mapping[str, Any] = None,
     ) -> Iterable[Mapping[str, str]]:
         stream_state = stream_state or {}
         start_date = self._start_date
@@ -144,7 +186,12 @@ class IncrementalFiservStream(FiservStream, IncrementalMixin):
         stream_state: Mapping[str, Any] = None,
     ) -> Iterable[StreamData]:
         stream_slice = stream_slice or {}
-        records = super().read_records(sync_mode, cursor_field, stream_slice, stream_state)
+        records = super().read_records(
+            sync_mode,
+            cursor_field,
+            stream_slice,
+            stream_state,
+        )
 
         old_cursor = self._cursor_value or self._start_date
         new_cursor = stream_slice.get("toDate", self.end_date)
@@ -162,7 +209,8 @@ class Settlement(IncrementalFiservStream):
 
 
 class Chargeback(IncrementalFiservStream):
-    primary_key = "chargebackReferenceId"  # represents the last date data was fetched
+    # represents the last date data was fetched
+    primary_key = "chargebackReferenceId"
     endpoint = "chargeback"
 
 
@@ -170,15 +218,28 @@ class Disbursement(IncrementalFiservStream):
     primary_key = "paymentVendorId"
     endpoint = "disbursement"
 
-    def request_body_json(
+    def request_body_data(
         self,
         stream_state: Mapping[str, Any] = None,
         stream_slice: Mapping[str, Any] = None,
         next_page_token: Mapping[str, Any] = None,
     ) -> Optional[Union[Mapping, str]]:
-        body = super().request_body_json(stream_state=stream_state, stream_slice=stream_slice, next_page_token=next_page_token)
+        body = super().request_body_data(
+            stream_state=stream_state,
+            stream_slice=stream_slice,
+            next_page_token=next_page_token,
+        )
+        body = json.loads(body)
 
-        return {**body, "filters": {"dateType": "PaymentDate", "currency": "USD", "timeZone": "UTC"}}
+        new_body = {
+            **body,
+            "filters": {
+                "dateType": "PaymentDate",
+                "currency": "USD",
+                "timeZone": "UTC",
+            },
+        }
+        return json.dumps(new_body, separators=(",", ":"), sort_keys=True)
 
 
 class Funding(IncrementalFiservStream):
@@ -195,6 +256,7 @@ class Retrieval(IncrementalFiservStream):
     primary_key = "debitNetworkIDKey"
     endpoint = "retrieval"
 
+
 class Authorization(IncrementalFiservStream):
     primary_key = "externalTerminalID"
     endpoint = "authorization"
@@ -204,12 +266,24 @@ class Sites(FiservStream):
     primary_key = "corpID"
     endpoint = "reference/sites"
 
-    def request_body_json(
-        self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
+    def request_body_data(
+        self,
+        stream_state: Mapping[str, Any] = None,
+        stream_slice: Mapping[str, Any] = None,
+        next_page_token: Mapping[str, Any] = None,
     ) -> Optional[Mapping[str, Any]]:
-        return {"filters": {}}
+        return json.dump(
+            {"filters": {}},
+            separators=(",", ":"),
+            sort_keys=True,
+        )
 
-    def stream_slices(self, sync_mode, stream_state: Mapping[str, Any] = None, **kwargs) -> Iterable[Optional[MutableMapping[str, any]]]:
+    def stream_slices(
+        self,
+        sync_mode,
+        stream_state: Mapping[str, Any] = None,
+        **kwargs,
+    ) -> Iterable[Optional[MutableMapping[str, any]]]:
         return [None]
 
 
@@ -222,10 +296,17 @@ class Bin(FiservStream):
     primary_key = "id"
     endpoint = "reference/bins"
 
-    parent_streams = [(Chargeback, "First6", "first6"), (Retrieval, "First6", "first6"), (Settlement, "First6", "first6")]
+    parent_streams = [
+        (Chargeback, "First6", "first6"),
+        (Retrieval, "First6", "first6"),
+        (Settlement, "First6", "first6"),
+    ]
 
     def stream_slices(
-        self, sync_mode: SyncMode, cursor_field: List[str] = None, stream_state: Mapping[str, Any] = None
+        self,
+        sync_mode: SyncMode,
+        cursor_field: List[str] = None,
+        stream_state: Mapping[str, Any] = None,
     ) -> Mapping[str, Any]:
         logger.info("Requesting stream slices")
         all_bin_ids = set()
@@ -239,10 +320,17 @@ class Bin(FiservStream):
 
             parent_stream_instance = ParentStream(**kwargs)
             logger.info("========================")
-            logger.info(f"Processing {parent_stream_instance.name} from {self._start_date}")
+            logger.info(
+                f"Processing {parent_stream_instance.name} from {self._start_date}",
+            )
 
-            for stream_slice in parent_stream_instance.stream_slices(sync_mode=SyncMode.full_refresh):
-                for record in parent_stream_instance.read_records(sync_mode=SyncMode.full_refresh, stream_slice=stream_slice):
+            for stream_slice in parent_stream_instance.stream_slices(
+                sync_mode=SyncMode.full_refresh,
+            ):
+                for record in parent_stream_instance.read_records(
+                    sync_mode=SyncMode.full_refresh,
+                    stream_slice=stream_slice,
+                ):
                     bin_ids = record.get(target_field)
                     if bin_ids:
                         all_bin_ids.add(bin_ids)
@@ -253,14 +341,18 @@ class Bin(FiservStream):
         for bin_id in all_bin_ids:
             yield {"bin_id": bin_id}
 
-    def request_body_json(  # log request json
+    def request_body_data(  # log request json
         self,
         stream_state: Mapping[str, Any] = None,
         stream_slice: Mapping[str, Any] = None,
         next_page_token: Mapping[str, Any] = None,
     ) -> Optional[Union[Mapping, str]]:
         bin_id = stream_slice.get("bin_id")
-        return {"filters": {"bin": bin_id}}
+        return json.dumps(
+            {"filters": {"bin": bin_id}},
+            separators=(",", ":"),
+            sort_keys=True,
+        )
 
 
 class SourceFiserv(AbstractSource):
