@@ -6,6 +6,7 @@ import logging
 import traceback
 from typing import TYPE_CHECKING, Optional, Tuple
 
+from airbyte_cdk import AirbyteTracedException
 from airbyte_cdk.sources import Source
 from airbyte_cdk.sources.file_based.availability_strategy import AbstractFileBasedAvailabilityStrategy
 from airbyte_cdk.sources.file_based.exceptions import CheckAvailabilityError, CustomFileBasedException, FileBasedSourceError
@@ -43,6 +44,7 @@ class DefaultFileBasedAvailabilityStrategy(AbstractFileBasedAvailabilityStrategy
         Returns (True, None) if successful, otherwise (False, <error message>).
 
         For the stream:
+        - Verify the parser config is valid per check_config method of the parser.
         - Verify that we can list files from the stream using the configured globs.
         - Verify that we can read one file from the stream as long as the stream parser is not setting parser_max_n_files_for_parsability to 0.
 
@@ -54,6 +56,9 @@ class DefaultFileBasedAvailabilityStrategy(AbstractFileBasedAvailabilityStrategy
           one file conform to the schema via a call to stream.conforms_to_schema(schema).
         """
         parser = stream.get_parser()
+        config_check_result, config_check_error_message = parser.check_config(stream.config)
+        if config_check_result is False:
+            return False, config_check_error_message
         try:
             file = self._check_list_files(stream)
             if not parser.parser_max_n_files_for_parsability == 0:
@@ -62,6 +67,8 @@ class DefaultFileBasedAvailabilityStrategy(AbstractFileBasedAvailabilityStrategy
                 # If the parser is set to not check parsability, we still want to check that we can open the file.
                 handle = stream.stream_reader.open_file(file, parser.file_read_mode, None, logger)
                 handle.close()
+        except AirbyteTracedException as ate:
+            raise ate
         except CheckAvailabilityError:
             return False, "".join(traceback.format_exc())
 
@@ -94,6 +101,8 @@ class DefaultFileBasedAvailabilityStrategy(AbstractFileBasedAvailabilityStrategy
             # consider the connection check successful even though it means
             # we skip the schema validation check.
             return
+        except AirbyteTracedException as ate:
+            raise ate
         except Exception as exc:
             raise CheckAvailabilityError(FileBasedSourceError.ERROR_READING_FILE, stream=stream.name, file=file.uri) from exc
 

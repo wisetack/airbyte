@@ -16,7 +16,7 @@ import avro.schema as avro_schema
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from airbyte_cdk.models import ConfiguredAirbyteCatalog
+from airbyte_cdk.models import ConfiguredAirbyteCatalog, ConfiguredAirbyteCatalogSerializer
 from airbyte_cdk.sources.file_based.availability_strategy import AbstractFileBasedAvailabilityStrategy, DefaultFileBasedAvailabilityStrategy
 from airbyte_cdk.sources.file_based.config.abstract_file_based_spec import AbstractFileBasedSpec
 from airbyte_cdk.sources.file_based.discovery_policy import AbstractDiscoveryPolicy, DefaultDiscoveryPolicy
@@ -26,11 +26,14 @@ from airbyte_cdk.sources.file_based.file_types.file_type_parser import FileTypeP
 from airbyte_cdk.sources.file_based.remote_file import RemoteFile
 from airbyte_cdk.sources.file_based.schema_validation_policies import DEFAULT_SCHEMA_VALIDATION_POLICIES, AbstractSchemaValidationPolicy
 from airbyte_cdk.sources.file_based.stream.cursor import AbstractFileBasedCursor, DefaultFileBasedCursor
+from airbyte_cdk.sources.source import TState
 from avro import datafile
-from pydantic import AnyUrl
+from pydantic.v1 import AnyUrl
 
 
 class InMemoryFilesSource(FileBasedSource):
+    _concurrency_level = 10
+
     def __init__(
         self,
         files: Mapping[str, Any],
@@ -41,6 +44,8 @@ class InMemoryFilesSource(FileBasedSource):
         parsers: Mapping[str, FileTypeParser],
         stream_reader: Optional[AbstractFileBasedStreamReader],
         catalog: Optional[Mapping[str, Any]],
+        config: Optional[Mapping[str, Any]],
+        state: Optional[TState],
         file_write_options: Mapping[str, Any],
         cursor_cls: Optional[AbstractFileBasedCursor],
     ):
@@ -48,6 +53,9 @@ class InMemoryFilesSource(FileBasedSource):
         self.files = files
         self.file_type = file_type
         self.catalog = catalog
+        self.configured_catalog = ConfiguredAirbyteCatalogSerializer.load(self.catalog) if self.catalog else None
+        self.config = config
+        self.state = state
 
         # Source setup
         stream_reader = stream_reader or InMemoryFilesStreamReader(files=files, file_type=file_type, file_write_options=file_write_options)
@@ -55,7 +63,9 @@ class InMemoryFilesSource(FileBasedSource):
         super().__init__(
             stream_reader,
             spec_class=InMemorySpec,
-            catalog_path="fake_path" if catalog else None,
+            catalog=self.configured_catalog,
+            config=self.config,
+            state=self.state,
             availability_strategy=availability_strategy,
             discovery_policy=discovery_policy or DefaultDiscoveryPolicy(),
             parsers=parsers,
@@ -64,7 +74,7 @@ class InMemoryFilesSource(FileBasedSource):
         )
 
     def read_catalog(self, catalog_path: str) -> ConfiguredAirbyteCatalog:
-        return ConfiguredAirbyteCatalog(streams=self.catalog["streams"]) if self.catalog else None
+        return self.configured_catalog
 
 
 class InMemoryFilesStreamReader(AbstractFileBasedStreamReader):
@@ -197,5 +207,25 @@ class TemporaryAvroFilesStreamReader(InMemoryFilesStreamReader):
                 data = {col["name"]: content[i] for i, col in enumerate(schema["fields"])}
                 file_writer.append(data)
             file_writer.flush()
+            fp.seek(0)
+            return fp.read()
+
+
+class TemporaryExcelFilesStreamReader(InMemoryFilesStreamReader):
+    """
+    A file reader that writes RemoteFiles to a temporary file and then reads them back.
+    """
+
+    def open_file(self, file: RemoteFile, mode: FileReadMode, encoding: Optional[str], logger: logging.Logger) -> IOBase:
+        return io.BytesIO(self._make_file_contents(file.uri))
+
+    def _make_file_contents(self, file_name: str) -> bytes:
+        contents = self.files[file_name]["contents"]
+        df = pd.DataFrame(contents)
+
+        with io.BytesIO() as fp:
+            writer = pd.ExcelWriter(fp, engine="xlsxwriter")
+            df.to_excel(writer, index=False, sheet_name="Sheet1")
+            writer._save()
             fp.seek(0)
             return fp.read()

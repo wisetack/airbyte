@@ -14,8 +14,14 @@ from airbyte_cdk.destinations.vector_db_based.config import (
     SeparatorSplitterConfigModel,
 )
 from airbyte_cdk.destinations.vector_db_based.document_processor import DocumentProcessor
-from airbyte_cdk.models import AirbyteStream, ConfiguredAirbyteCatalog, ConfiguredAirbyteStream
-from airbyte_cdk.models.airbyte_protocol import AirbyteRecordMessage, DestinationSyncMode, SyncMode
+from airbyte_cdk.models import (
+    AirbyteRecordMessage,
+    AirbyteStream,
+    ConfiguredAirbyteCatalog,
+    ConfiguredAirbyteStream,
+    DestinationSyncMode,
+    SyncMode,
+)
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException
 
 
@@ -273,6 +279,18 @@ def test_process_multiple_chunks_with_relevant_fields():
                 "text: One two three four five six",
                 "four five six seven eight nine ten",
                 "eight nine ten eleven twelve thirteen",
+            ],
+        ),
+        (
+            "Special tokens",
+            "Special tokens like <|endoftext|> are treated like regular text",
+            15,
+            0,
+            None,
+            [
+                "text: Special tokens like",
+                "<|endoftext|> are treated like regular",
+                "text",
             ],
         ),
         (

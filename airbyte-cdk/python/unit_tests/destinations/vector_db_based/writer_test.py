@@ -7,12 +7,13 @@ from unittest.mock import ANY, MagicMock, call
 
 import pytest
 from airbyte_cdk.destinations.vector_db_based import ProcessingConfigModel, Writer
-from airbyte_cdk.models.airbyte_protocol import (
+from airbyte_cdk.models import (
     AirbyteLogMessage,
     AirbyteMessage,
     AirbyteRecordMessage,
     AirbyteStateMessage,
     ConfiguredAirbyteCatalog,
+    ConfiguredAirbyteCatalogSerializer,
     Level,
     Type,
 )
@@ -48,8 +49,8 @@ def generate_stream(name: str = "example_stream", namespace: Optional[str] = Non
 
 def generate_mock_embedder():
     mock_embedder = MagicMock()
-    mock_embedder.embed_chunks.return_value = [[0] * 1536] * (BATCH_SIZE + 5 + 5)
-    mock_embedder.embed_chunks.side_effect = lambda chunks: [[0] * 1536] * len(chunks)
+    mock_embedder.embed_documents.return_value = [[0] * 1536] * (BATCH_SIZE + 5 + 5)
+    mock_embedder.embed_documents.side_effect = lambda chunks: [[0] * 1536] * len(chunks)
 
     return mock_embedder
 
@@ -61,7 +62,7 @@ def test_write(omit_raw_text: bool):
     """
     config_model = ProcessingConfigModel(chunk_overlap=0, chunk_size=1000, metadata_fields=None, text_fields=["column_name"])
 
-    configured_catalog: ConfiguredAirbyteCatalog = ConfiguredAirbyteCatalog.parse_obj({"streams": [generate_stream()]})
+    configured_catalog: ConfiguredAirbyteCatalog = ConfiguredAirbyteCatalogSerializer.load({"streams": [generate_stream()]})
     # messages are flushed after 32 records or after a state message, so this will trigger two batches to be processed
     input_messages = [_generate_record_message(i) for i in range(BATCH_SIZE + 5)]
     state_message = AirbyteMessage(type=Type.STATE, state=AirbyteStateMessage())
@@ -88,7 +89,7 @@ def test_write(omit_raw_text: bool):
     # 1 batches due to max batch size reached and 1 batch due to state message
     assert mock_indexer.index.call_count == 2
     assert mock_indexer.delete.call_count == 2
-    assert mock_embedder.embed_chunks.call_count == 2
+    assert mock_embedder.embed_documents.call_count == 2
 
     if omit_raw_text:
         for call_args in mock_indexer.index.call_args_list:
@@ -110,7 +111,7 @@ def test_write(omit_raw_text: bool):
     # 1 batch due to end of message stream
     assert mock_indexer.index.call_count == 3
     assert mock_indexer.delete.call_count == 3
-    assert mock_embedder.embed_chunks.call_count == 3
+    assert mock_embedder.embed_documents.call_count == 3
 
     mock_indexer.post_sync.assert_called()
 
@@ -126,7 +127,7 @@ def test_write_stream_namespace_split():
     """
     config_model = ProcessingConfigModel(chunk_overlap=0, chunk_size=1000, metadata_fields=None, text_fields=["column_name"])
 
-    configured_catalog: ConfiguredAirbyteCatalog = ConfiguredAirbyteCatalog.parse_obj(
+    configured_catalog: ConfiguredAirbyteCatalog = ConfiguredAirbyteCatalogSerializer.load(
         {
             "streams": [
                 generate_stream(),
@@ -169,4 +170,4 @@ def test_write_stream_namespace_split():
             call(ANY, None, "example_stream2"),
         ]
     )
-    assert mock_embedder.embed_chunks.call_count == 4
+    assert mock_embedder.embed_documents.call_count == 4

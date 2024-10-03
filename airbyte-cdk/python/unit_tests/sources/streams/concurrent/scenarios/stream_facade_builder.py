@@ -1,24 +1,32 @@
 #
 # Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 #
+
 import concurrent
 import logging
 from typing import Any, List, Mapping, Optional, Tuple, Union
 
-from airbyte_cdk.models import AirbyteStateMessage, ConfiguredAirbyteCatalog, ConnectorSpecification, DestinationSyncMode, SyncMode
+from airbyte_cdk.models import (
+    AirbyteStateMessage,
+    ConfiguredAirbyteCatalog,
+    ConfiguredAirbyteStream,
+    ConnectorSpecification,
+    DestinationSyncMode,
+    SyncMode,
+)
 from airbyte_cdk.sources.concurrent_source.concurrent_source import ConcurrentSource
 from airbyte_cdk.sources.concurrent_source.concurrent_source_adapter import ConcurrentSourceAdapter
 from airbyte_cdk.sources.concurrent_source.thread_pool_manager import ThreadPoolManager
 from airbyte_cdk.sources.connector_state_manager import ConnectorStateManager
 from airbyte_cdk.sources.message import InMemoryMessageRepository, MessageRepository
+from airbyte_cdk.sources.source import TState
 from airbyte_cdk.sources.streams import Stream
-from airbyte_cdk.sources.streams.concurrent.adapters import StreamFacade
-from airbyte_cdk.sources.streams.concurrent.cursor import ConcurrentCursor, CursorField, NoopCursor
-from airbyte_cdk.sources.streams.concurrent.state_converter import EpochValueConcurrentStreamStateConverter
-from airbyte_protocol.models import ConfiguredAirbyteStream
+from airbyte_cdk.sources.streams.concurrent.cursor import CursorField
+from airbyte_cdk.sources.streams.concurrent.state_converters.datetime_stream_state_converter import EpochValueConcurrentStreamStateConverter
 from unit_tests.sources.file_based.scenarios.scenario_builder import SourceBuilder
 from unit_tests.sources.streams.concurrent.scenarios.thread_based_concurrent_stream_source_builder import NeverLogSliceLogger
 
+_CURSOR_FIELD = "cursor_field"
 _NO_STATE = None
 
 
@@ -43,32 +51,20 @@ class StreamFacadeSource(ConcurrentSourceAdapter):
         self._threadpool = threadpool_manager
         self._cursor_field = cursor_field
         self._cursor_boundaries = cursor_boundaries
-        self._state = [AirbyteStateMessage.parse_obj(s) for s in input_state] if input_state else None
+        self._state = [AirbyteStateMessage(s) for s in input_state] if input_state else None
 
     def check_connection(self, logger: logging.Logger, config: Mapping[str, Any]) -> Tuple[bool, Optional[Any]]:
         return True, None
 
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
-        state_manager = ConnectorStateManager(stream_instance_map={s.name: s for s in self._streams}, state=self._state)
-        state_converter = StreamFacadeConcurrentConnectorStateConverter("created")
+        state_manager = ConnectorStateManager(
+            state=self._state,
+        )  # The input values into the AirbyteStream are dummy values; the connector state manager only uses `name` and `namespace`
+        state_converter = StreamFacadeConcurrentConnectorStateConverter()
+
         return [
-            StreamFacade.create_from_stream(
-                stream,
-                self,
-                stream.logger,
-                state_converter.get_concurrent_stream_state(state_manager.get_stream_state(stream.name, stream.namespace)),
-                ConcurrentCursor(
-                    stream.name,
-                    stream.namespace,
-                    state_converter.get_concurrent_stream_state(state_manager.get_stream_state(stream.name, stream.namespace)),
-                    self.message_repository,  # type: ignore  # for this source specifically, we always return `InMemoryMessageRepository`
-                    state_manager,
-                    state_converter,
-                    self._cursor_field,
-                    self._cursor_boundaries,
-                )
-                if self._cursor_field
-                else NoopCursor(),
+            self.convert_to_concurrent_stream(stream.logger, stream, self.initialize_cursor(
+                stream, state_manager, state_converter, self._cursor_boundaries, None, EpochValueConcurrentStreamStateConverter.get_end_provider())
             )
             for stream in self._streams
         ]
@@ -120,6 +116,8 @@ class StreamFacadeSourceBuilder(SourceBuilder[StreamFacadeSource]):
         self._input_state = state
         return self
 
-    def build(self, configured_catalog: Optional[Mapping[str, Any]]) -> StreamFacadeSource:
+    def build(
+        self, configured_catalog: Optional[Mapping[str, Any]], config: Optional[Mapping[str, Any]], state: Optional[TState]
+    ) -> StreamFacadeSource:
         threadpool = concurrent.futures.ThreadPoolExecutor(max_workers=self._max_workers, thread_name_prefix="workerpool")
-        return StreamFacadeSource(self._streams, threadpool, self._cursor_field, self._cursor_boundaries, self._input_state)
+        return StreamFacadeSource(self._streams, threadpool, self._cursor_field, self._cursor_boundaries, state)
