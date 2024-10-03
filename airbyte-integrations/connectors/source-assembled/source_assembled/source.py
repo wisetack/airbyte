@@ -31,9 +31,7 @@ class AssembledStream(HttpStream, ABC):
 
     url_base = BASE_URL
 
-    def request_headers(
-        self, **kwargs
-    ) -> Mapping[str, Any]:
+    def request_headers(self, **kwargs) -> Mapping[str, Any]:
         # required headers for Assembled API
         # as of 4/28/2023
         return {
@@ -105,7 +103,9 @@ class FiltersQueues(AssembledStream):
 class People(AssembledStream):
     data_field = "people"
 
-    def request_params(self, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None, **kwargs) -> MutableMapping[str, Any]:
+    def request_params(
+        self, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None, **kwargs
+    ) -> MutableMapping[str, Any]:
         return {
             **super().request_params(stream_slice, next_page_token, **kwargs),
             "included_deleted": True,
@@ -249,8 +249,10 @@ class ReportRequestStream(IncrementalAssembledStream, ABC):
     def __init__(
         self,
         report_name: str,
+        interval: str = "30m",
         **kwargs,
     ):
+        self.interval = interval
         self.report_name = report_name
         super().__init__(**kwargs)
 
@@ -269,7 +271,7 @@ class ReportRequestStream(IncrementalAssembledStream, ABC):
     def request_body_json(self, stream_slice: Mapping[str, Any] = None, **kwargs) -> Optional[Mapping]:
         stream_slice = stream_slice or {}
         return {
-            "interval": "30m",
+            "interval": self.interval,
             **stream_slice,
         }
 
@@ -309,7 +311,7 @@ class ReportStream(HttpSubStream, AssembledStream):
 
     @state.setter
     def state(self, value: Mapping[str, Any]):
-        self._cursor_value = value[self.cursor_field]
+        self._cursor_value = value.get(self.cursor_field, self._cursor_value)
 
     def should_retry(self, response: requests.Response) -> bool:
         result = response.json() if response.status_code >= 200 and response.status_code < 204 else {}
@@ -482,7 +484,7 @@ class SourceAssembled(AbstractSource):
             "channels": report_channels,
         }
 
-        adherence_report_requests = ReportRequestStream(report_name="adherence", **report_kwargs)
+        adherence_report_requests = ReportRequestStream(report_name="adherence", interval="1h", **report_kwargs)
         agent_ticket_stats_report_requests = ReportRequestStream(report_name="agent_ticket_stats", **report_kwargs)
 
         return [
